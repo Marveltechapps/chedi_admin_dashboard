@@ -1,7 +1,10 @@
 import { clearSession, getAccessToken, getRefreshToken, saveAccessToken, saveSession } from './session';
 import type { StoredStaff } from './session';
+import { networkErrorMessage, resolveApiBase } from './apiBase';
 
-const BASE = String(import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+function apiBase() {
+  return resolveApiBase();
+}
 
 export class ApiError extends Error {
   status: number;
@@ -57,7 +60,7 @@ async function tryRefresh(): Promise<boolean> {
     const refreshToken = getRefreshToken();
     if (!refreshToken) return false;
     try {
-      const res = await fetch(`${BASE}/admin/refresh`, {
+      const res = await fetch(`${apiBase()}/admin/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId() },
         body: JSON.stringify({ refreshToken }),
@@ -104,7 +107,7 @@ function throwFromBody(res: Response, json: Record<string, unknown> | null): nev
 }
 
 export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = {}): Promise<ApiResult<T>> {
-  const url = `${BASE}${withQuery(path, opts.query)}`;
+  const url = `${apiBase()}${withQuery(path, opts.query)}`;
   const headers: Record<string, string> = {
     'X-Request-Id': requestId(),
     ...(opts.headers || {}),
@@ -116,12 +119,17 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
   }
   if (opts.idempotent) headers['Idempotency-Key'] = crypto.randomUUID();
 
-  const exec = () =>
-    fetch(url, {
-      method: opts.method || 'GET',
-      headers,
-      body: opts.body == null ? undefined : JSON.stringify(opts.body),
-    });
+  const exec = async () => {
+    try {
+      return await fetch(url, {
+        method: opts.method || 'GET',
+        headers,
+        body: opts.body == null ? undefined : JSON.stringify(opts.body),
+      });
+    } catch {
+      throw new ApiError(0, 'NETWORK_ERROR', networkErrorMessage());
+    }
+  };
 
   let res = await exec();
   if (res.status === 401 && !opts.skipAuth && !path.endsWith('/admin/login') && !path.endsWith('/admin/refresh')) {
