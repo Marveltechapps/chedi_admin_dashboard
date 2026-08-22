@@ -1,0 +1,38 @@
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; padding: 0; height: 100%; }
+body {
+  background: #ece7d8;
+  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  color: #22271f;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: #2e5a41; text-decoration: none; }
+a:hover { color: #b98a2e; }
+::selection { background: #d9b45f; color: #1c3b2c; }
+input, select, textarea, button { font-family: inherit; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #cdd5be; border-radius: 5px; border: 2px solid #f0ece0; }
+
+@keyframes chFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes chSlide { from { transform: translateX(30px); opacity: .4; } to { transform: none; opacity: 1; } }
+@keyframes chToast { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.ch-fade { animation: chFade .3s ease both; }
+.ch-slide { animation: chSlide .28s ease both; }
+.ch-toast { animation: chToast .3s ease both; }
+
+.ch-btn-primary { background: #1c3b2c; color: #f6f3ea; border: none; cursor: pointer; }
+.ch-btn-primary:hover { background: #b98a2e; color: #1c3b2c; }
+
+.ch-btn-outline { background: none; color: #1c3b2c; border: 1px solid #c3bba6; cursor: pointer; }
+.ch-btn-outline:hover { border-color: #b98a2e; color: #b98a2e; }
+
+.ch-btn-danger-outline { background: none; color: #b0361f; border: 1px solid #e0b3a6; cursor: pointer; }
+
+.ch-card-hover { border: 1px solid #e4ded0; }
+.ch-card-hover:hover { border-color: #c9d0bb; }
+
+.ch-row-hover:hover { background: #faf8f2; }
+
+.ch-signout { background: none; border: 1px solid #3a5545; color: #b6c1ac; cursor: pointer; }
+.ch-signout:hover { border-color: #d9b45f; color: #d9b45f; }
