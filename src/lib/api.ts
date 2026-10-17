@@ -167,6 +167,7 @@ export const api = {
   post: <T>(path: string, body?: unknown, extra?: Pick<RequestOpts, 'idempotent' | 'skipAuth'>) =>
     apiRequest<T>(path, { method: 'POST', body, ...extra }),
   patch: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'PATCH', body }),
+  del: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'DELETE', body }),
 };
 
 export async function downloadCsv(path: string, query?: RequestOpts['query']) {

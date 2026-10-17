@@ -57,7 +57,7 @@ export function Login() {
               setEmail(e.target.value);
               if (error) setError('');
             }}
-            placeholder="you@chedi.in"
+            placeholder="Enter your email"
             style={{ width: '100%', margin: '6px 0 14px', padding: '12px 14px', border: '1px solid #d8cfb8', borderRadius: 3, fontSize: 14, background: '#faf8f2' }}
           />
           <label htmlFor="admin-password" style={{ fontSize: 13, color: '#6f7566', fontWeight: 600 }}>Password</label>
@@ -72,7 +72,7 @@ export function Login() {
               setPassword(e.target.value);
               if (error) setError('');
             }}
-            placeholder="Password"
+            placeholder="Enter your password"
             style={{ width: '100%', margin: '6px 0 20px', padding: '12px 14px', border: '1px solid #d8cfb8', borderRadius: 3, fontSize: 14, background: '#faf8f2' }}
           />
           {formError && (

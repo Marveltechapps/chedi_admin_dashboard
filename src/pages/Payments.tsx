@@ -10,7 +10,6 @@ const GROUPS: [string, string][] = [
   ['overdue', 'Overdue'],
   ['paid', 'Paid'],
   ['failed', 'Failed'],
-  ['refunded', 'Refunded'],
 ];
 
 const TYPE_LABEL: Record<string, string> = { membership: 'MEMBERSHIP', subscription: 'SUBSCRIPTION', renewal: 'RENEWAL', delivery: 'DELIVERY' };
@@ -69,12 +68,8 @@ export function Payments() {
                   </>
                 )}
                 {p.status === 'paid' && (
-                  <>
-                    <button onClick={() => actions.showReceipt(p.id || p.ref)} style={actionBtnStyle()}>Receipt</button>
-                    <button onClick={() => actions.refundPay(p.id || p.ref)} style={actionBtnStyle()}>Refund</button>
-                  </>
+                  <button onClick={() => actions.showReceipt(p.id || p.ref)} style={actionBtnStyle()}>Receipt</button>
                 )}
-                {p.status === 'refunded' && <button onClick={() => actions.showReceipt(p.id || p.ref)} style={actionBtnStyle()}>Receipt</button>}
               </div>
             </div>
           );

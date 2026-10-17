@@ -12,6 +12,7 @@ import type {
   Payment,
   Plan,
   Plot,
+  PlotImage,
   ReportData,
   SentNotif,
   TeamMember,
@@ -37,6 +38,7 @@ export function mapStaff(dto: Record<string, unknown>): TeamMember {
     roleLabel: str(dto.roleLabel || dto.role),
     initial: str(dto.initial || String(dto.name || 'A')[0]).toUpperCase(),
     scope: str(dto.scope),
+    active: dto.active !== false,
   };
 }
 
@@ -73,6 +75,21 @@ export function mapMember(dto: Record<string, unknown>): Member {
     cycleStart: str(dto.cycleStartLabel),
     cycleEnd: str(dto.cycleEndLabel),
     activeSubscriptionId: dto.activeSubscriptionId ? str(dto.activeSubscriptionId) : null,
+    welcomeBasket: mapWelcome(dto.welcomeBasket),
+  };
+}
+
+function mapWelcome(value: unknown): Member['welcomeBasket'] {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  const status = str(row.status);
+  if (!status) return null;
+  return {
+    status,
+    etaLabel: str(row.etaLabel),
+    description: str(row.description) === 'Seasonal vegetable sample box' || !str(row.description)
+      ? 'Token of Love'
+      : str(row.description),
   };
 }
 
@@ -85,6 +102,16 @@ export function mapFarm(dto: Record<string, unknown>): Farm {
     plotCount: num(dto.plotCount),
     leasedCount: num(dto.leasedCount),
   };
+}
+
+function mapGallery(value: unknown): PlotImage[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const row = asRecord(item);
+      return { label: str(row.label), imageUrl: str(row.imageUrl || row.img) };
+    })
+    .filter((row) => row.imageUrl);
 }
 
 export function mapPlot(dto: Record<string, unknown>): Plot {
@@ -100,9 +127,18 @@ export function mapPlot(dto: Record<string, unknown>): Plot {
     harvestDate: formatDay(dto.harvestDate ? str(dto.harvestDate) : '') || str(dto.harvestDate),
     stage: (dto.cropStage || 'planned') as Plot['stage'],
     cropName: dto.cropName ? str(dto.cropName) : null,
+    cropLabel: str(dto.crop),
     memberName: dto.memberName ? str(dto.memberName) : null,
     farmerName: dto.farmerName ? str(dto.farmerName) : null,
     region: str(dto.region),
+    city: str(dto.city),
+    district: str(dto.district),
+    stateName: str(dto.state),
+    soil: str(dto.soil),
+    imageUrl: str(dto.imageUrl),
+    gallery: mapGallery(dto.gallery),
+    totalUnits: num(dto.totalUnits),
+    availableUnits: num(dto.availableUnits),
     targetYield: dto.targetYield == null ? null : num(dto.targetYield),
     actualYield: dto.actualYield == null ? null : num(dto.actualYield),
     unit: str(dto.unit, 'kg'),
@@ -135,6 +171,8 @@ export function mapPayment(dto: Record<string, unknown>): Payment {
     status: (dto.opsStatus || 'pending') as Payment['status'],
     method: str(dto.method),
     collected: formatDay(str(dto.collectedAt)) || str(dto.collectedAt),
+    plotKey: str((dto.metadata as Record<string, unknown> | undefined)?.plotKey),
+    planKey: str((dto.metadata as Record<string, unknown> | undefined)?.planKey),
   };
 }
 
@@ -230,8 +268,8 @@ export function mapCultivation(dto: Record<string, unknown>): Cultivation {
     cropKey: str(dto.cropKey),
     cropName: str(dto.cropName),
     unit: str(dto.unit, 'kg'),
-    plantDate: formatDay(str(dto.plantDate)) || str(dto.plantDate),
-    harvestDate: formatDay(str(dto.harvestDate)) || str(dto.harvestDate),
+    plantDate: str(dto.plantDate).slice(0, 10),
+    harvestDate: str(dto.harvestDate).slice(0, 10),
     cropStage: (dto.cropStage || 'planned') as Cultivation['cropStage'],
     targetYield: num(dto.targetYield),
     actualYield: dto.actualYield == null ? null : num(dto.actualYield),

@@ -134,8 +134,24 @@ export function MemberDrawer() {
 
           {state.drawerTab === 'deliveries' && (
             <div style={{ background: '#fff', border: '1px solid #e4ded0', borderRadius: 7, overflow: 'hidden' }}>
+              {m.welcomeBasket && (() => {
+                const gift = sPill(m.welcomeBasket.status);
+                const received = m.welcomeBasket.status === 'received' || m.welcomeBasket.status === 'delivered';
+                return (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', fontSize: 13 }}>
+                    <div>
+                      <div style={{ color: '#3a4033' }}>Welcome gift · {m.welcomeBasket.description || 'Token of Love'}</div>
+                      <div style={{ fontSize: 11, color: '#9aa08d', marginTop: 1 }}>
+                        {received ? 'Received' : 'In transit'}
+                        {m.welcomeBasket.etaLabel ? ` · ${m.welcomeBasket.etaLabel}` : ''}
+                      </div>
+                    </div>
+                    <span style={gift.style}>{gift.label}</span>
+                  </div>
+                );
+              })()}
               {deliveries.map((d, i) => (
-                <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', borderTop: i === 0 ? 'none' : '1px solid #f2ede1', fontSize: 13 }}>
+                <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', borderTop: i === 0 && !m.welcomeBasket ? 'none' : '1px solid #f2ede1', fontSize: 13 }}>
                   <div>
                     <div style={{ color: '#3a4033' }}>{d.date} · {d.boxes}</div>
                     <div style={{ fontSize: 11, color: '#9aa08d', marginTop: 1 }}>{d.plotDisplay}</div>
@@ -143,7 +159,7 @@ export function MemberDrawer() {
                   <span style={d.statusStyle}>{d.statusLabel}</span>
                 </div>
               ))}
-              {deliveries.length === 0 && <div style={{ padding: '16px 18px', fontSize: 13, color: '#9aa08d' }}>No deliveries yet.</div>}
+              {deliveries.length === 0 && !m.welcomeBasket && <div style={{ padding: '16px 18px', fontSize: 13, color: '#9aa08d' }}>No deliveries yet.</div>}
             </div>
           )}
 

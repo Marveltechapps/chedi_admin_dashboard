@@ -53,6 +53,7 @@ function createProxy(proxyTarget: string): Record<string, ProxyOptions> {
       configure: jsonProxyError(),
     },
     '/health': common,
+    '/uploads': common,
     '/socket.io': { ...common, ws: true },
   }
 }

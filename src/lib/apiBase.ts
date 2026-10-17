@@ -56,3 +56,13 @@ export function resolveSocketBase() {
 export function networkErrorMessage() {
   return 'Unable to reach the CHEDI API. Confirm the backend is running and reachable.';
 }
+
+/** Turn a stored `/uploads/...` path into a URL the browser can load. */
+export function mediaUrl(url?: string | null) {
+  const raw = String(url || '').trim();
+  if (!raw || /^(https?:|data:|blob:)/i.test(raw)) return raw;
+  const api = resolveApiBase().replace(/\/+$/, '');
+  const origin = api.replace(/\/api\/v1$/i, '').replace(/\/api$/i, '');
+  const path = raw.startsWith('/') ? raw : `/${raw}`;
+  return `${origin}${path}`;
+}

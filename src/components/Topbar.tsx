@@ -5,7 +5,7 @@ import type { TabKey } from '../types';
 const TITLES: Record<TabKey, [string, (memberCount: number) => string]> = {
   dashboard: ['Dashboard', () => 'Farm Club at a glance'],
   members: ['Members', (n) => (n ? n + ' members' : 'No members yet')],
-  payments: ['Payments', () => 'Payment center — requests, receipts, refunds'],
+  payments: ['Payments', () => 'Payment center — requests and receipts'],
   subs: ['Subscriptions', () => 'Full lifecycle and renewals'],
   plots: ['Plots & Farm', () => 'Farms, plots, farmers and assignments'],
   crops: ['Crops & Harvest', () => 'Crop cycles, stages and shortfalls'],
@@ -44,8 +44,10 @@ export function Topbar() {
           </span>
         </div>
         <button
-          onClick={() => actions.go('dashboard')}
-          style={{ position: 'relative', background: '#fff', border: '1px solid #e0d9c6', width: 40, height: 40, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          type="button"
+          aria-label="Notifications"
+          onClick={() => actions.go('notifs')}
+          style={{ position: 'relative', background: state.tab === 'notifs' ? '#eef2e9' : '#fff', border: '1px solid #e0d9c6', width: 40, height: 40, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
         >
           <Icon name="bell" color="#4b5142" size={18} />
           {!!actionCount && (

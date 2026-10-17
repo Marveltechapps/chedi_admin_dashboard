@@ -20,6 +20,7 @@ export interface TeamMember {
   roleLabel?: string;
   initial: string;
   scope?: string;
+  active?: boolean;
 }
 
 export interface Plan {
@@ -49,6 +50,11 @@ export interface Member {
   cycleStart: string;
   cycleEnd: string;
   activeSubscriptionId?: string | null;
+  welcomeBasket?: {
+    status: string;
+    etaLabel: string;
+    description: string;
+  } | null;
 }
 
 export interface Farm {
@@ -71,6 +77,11 @@ export type PlotStatus =
 
 export type CropStage = 'planned' | 'growing' | 'flowering' | 'fruiting' | 'ready' | 'harvested';
 
+export interface PlotImage {
+  label: string;
+  imageUrl: string;
+}
+
 export interface Plot {
   key: string;
   name: string;
@@ -83,9 +94,18 @@ export interface Plot {
   harvestDate: string;
   stage: CropStage;
   cropName?: string | null;
+  cropLabel?: string;
   memberName?: string | null;
   farmerName?: string | null;
   region?: string;
+  city?: string;
+  district?: string;
+  stateName?: string;
+  soil?: string;
+  imageUrl?: string;
+  gallery?: PlotImage[];
+  totalUnits?: number;
+  availableUnits?: number;
   targetYield?: number | null;
   actualYield?: number | null;
   unit?: string;
@@ -131,6 +151,8 @@ export interface Payment {
   status: PaymentStatus;
   method: string;
   collected: string;
+  plotKey?: string;
+  planKey?: string;
 }
 
 export interface BasketItem {
@@ -156,6 +178,8 @@ export type DeliveryStatus =
   | 'ready_dispatch'
   | 'out'
   | 'delivered'
+  | 'received'
+  | 'dispatched'
   | 'failed'
   | 'cancelled'
   | 'rescheduled';
@@ -243,7 +267,7 @@ export interface ModalRow {
 }
 
 export interface ModalState {
-  kind: 'markPaid' | 'refund' | 'createPay' | 'member' | 'sub' | 'delivery' | 'assign' | 'info' | 'supplement';
+  kind: 'markPaid' | 'createPay' | 'member' | 'sub' | 'delivery' | 'assign' | 'info' | 'supplement';
   ref?: string;
   memberId?: string;
   plotKey?: string;

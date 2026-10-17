@@ -45,6 +45,8 @@ const map: Record<string, [string, string, string, string]> = {
   ready_dispatch: [...y, 'Ready to dispatch'],
   out: [...y, 'Out for delivery'],
   delivered: [...g, 'Delivered'],
+  received: [...g, 'Received'],
+  dispatched: [...y, 'In transit'],
   rescheduled: [...n, 'Rescheduled'],
   draft: [...d, 'Draft'],
   review: [...y, 'In review'],

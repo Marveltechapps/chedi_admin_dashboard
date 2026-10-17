@@ -34,10 +34,23 @@ export function Members() {
           <span>Member</span><span>Location</span><span>Joined</span><span>Plot · Plan</span><span>Status</span><span></span>
         </div>
         {rows.map((m) => {
-          const st = pill(m.status);
-          const plotPlan = m.plotName || m.plotKey
-            ? `${m.plotName || helpers.plotName(m.plotKey)} · ${m.planName || helpers.planName(m.planKey)}`
-            : (m.planName || helpers.planName(m.planKey) || '—');
+          const leasePays = state.payments.filter(
+            (p) => p.memberId === m.id && p.context === 'lease' && (p.plotKey || p.planKey)
+          );
+          const pendingLease = leasePays.find((p) => ['pending', 'overdue'].includes(p.status));
+          const leasePay = pendingLease || (!m.planKey ? leasePays.find((p) => p.status === 'paid') : undefined);
+          const st = pill(
+            pendingLease && (!m.subStatus || ['none', 'active'].includes(m.subStatus))
+              ? 'payment_pending'
+              : m.subStatus && !['none', 'active'].includes(m.subStatus)
+                ? m.subStatus
+                : m.status
+          );
+          const plotKey = m.plotKey || leasePay?.plotKey;
+          const planKey = m.planKey || leasePay?.planKey;
+          const plotPlan = plotKey || planKey
+            ? `${m.plotName || helpers.plotName(plotKey) || 'Plot'} · ${m.planName || helpers.planName(planKey) || 'Plan'}`
+            : '—';
           return (
             <div
               key={m.id}

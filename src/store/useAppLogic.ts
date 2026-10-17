@@ -8,8 +8,8 @@ import type {
 } from '../types';
 import { emptyState } from '../data/empty';
 import { fmt } from '../lib/format';
-import { api, downloadCsv, errorMessage } from '../lib/api';
-import { clearSession, getAccessToken, getStoredStaff, saveSession } from '../lib/session';
+import { api, ApiError, downloadCsv, errorMessage } from '../lib/api';
+import { clearSession, getAccessToken, getRefreshToken, getStoredStaff, saveSession } from '../lib/session';
 import { nextSaturdayIso } from '../lib/dates';
 import { HREF_TAB } from '../lib/roles';
 import { connectRealtime, disconnectRealtime, subscribeRealtime, REALTIME_EVENTS } from '../lib/realtime';
@@ -33,6 +33,23 @@ import {
   mapStaff,
   mapTicket,
 } from '../lib/mappers';
+
+function samePlotImage(a?: string | null, b?: string | null) {
+  const norm = (url?: string | null) => {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    try {
+      const parsed = new URL(raw, 'http://local.invalid');
+      if (parsed.pathname.includes('/uploads/plots/')) return parsed.pathname;
+    } catch {
+      /* keep the raw value */
+    }
+    return raw.split('?')[0];
+  };
+  const left = norm(a);
+  const right = norm(b);
+  return Boolean(left) && left === right;
+}
 
 const LIST_Q = { page: 1, limit: 100 };
 const RANGE_API: Record<string, string> = {
@@ -205,7 +222,23 @@ export function useAppLogic() {
 
   const loadStaff = async () => {
     const { data } = await api.get('/admin/staff');
-    patch({ team: asRecords(data).map(mapStaff) });
+    const team = asRecords(data).map(mapStaff);
+    patch({ team });
+    const self = team.find((t) => t.id === stateRef.current.me);
+    const access = getAccessToken();
+    const refresh = getRefreshToken();
+    if (self && access && refresh) {
+      saveSession(access, refresh, {
+        id: self.id,
+        name: self.name,
+        email: self.email,
+        role: self.roleKey || self.role,
+        roleLabel: self.roleLabel || self.role,
+        initial: self.initial,
+        scope: self.scope,
+      });
+    }
+    return team;
   };
 
   const loadPlans = async () => {
@@ -250,7 +283,7 @@ export function useAppLogic() {
     patch({ bootstrapping: false });
   };
 
-  const afterWrite = async (reload: Array<() => Promise<void>> = []) => {
+  const afterWrite = async (reload: Array<() => Promise<unknown>> = []) => {
     await Promise.allSettled([loadDashboard(), loadAudit(), ...reload.map((fn) => fn())]);
   };
 
@@ -264,6 +297,32 @@ export function useAppLogic() {
       fail(err);
     } finally {
       patch({ busy: false });
+    }
+  };
+
+  const mutate = async <T>(fn: () => Promise<T>, okToast?: string): Promise<T | null> => {
+    if (stateRef.current.busy) return null;
+    patch({ busy: true });
+    try {
+      const value = await fn();
+      if (okToast) flash(okToast);
+      return value;
+    } catch (err) {
+      fail(err);
+      return null;
+    } finally {
+      patch({ busy: false });
+    }
+  };
+
+  const writeQuiet = async <T>(fn: () => Promise<T>, okToast?: string): Promise<T | null> => {
+    try {
+      const value = await fn();
+      if (okToast) flash(okToast);
+      return value;
+    } catch (err) {
+      fail(err);
+      return null;
     }
   };
 
@@ -607,40 +666,6 @@ export function useAppLogic() {
     }, `Reminder sent to ${p.memberName || member(p.memberId)?.name || 'member'}`);
   };
 
-  const refundPay = (ref: string) => {
-    const p = paymentOf(ref);
-    if (!p) return;
-    const m = member(p.memberId);
-    patch({
-      modal: {
-        kind: 'refund',
-        ref: p.id || p.ref,
-        iconBg: '#f9e6df',
-        icon: 'card',
-        title: 'Issue refund',
-        body: 'This reverses the collected payment and logs a refund. The member will be notified.',
-        rows: [
-          { k: 'Member', v: m?.name || p.memberName || '—' },
-          { k: 'For', v: p.desc },
-          { k: 'Amount', v: fmt(p.amount), w: 700 },
-        ],
-        confirmLabel: 'Issue refund',
-        confirmBg: '#b0361f',
-        confirmColor: '#fff',
-      },
-    });
-  };
-
-  const doRefund = () => {
-    const ref = stateRef.current.modal?.ref;
-    if (!ref) return;
-    void run(async () => {
-      await api.post(`/admin/payments/${ref}/refund`, {}, { idempotent: true });
-      patch({ modal: null });
-      await afterWrite([loadPayments, loadMembers]);
-    }, 'Refund issued');
-  };
-
   const showReceipt = (ref: string) => {
     const p = paymentOf(ref);
     if (!p) return;
@@ -830,6 +855,127 @@ export function useAppLogic() {
     closeModal();
   };
 
+  const reloadPlots = () => afterWrite([loadPlots, loadFarms]);
+
+  const fetchPlot = async (key: string) => {
+    try {
+      const { data } = await api.get(`/admin/plots/${key}`);
+      return mapPlot(asRecord(data));
+    } catch (err) {
+      fail(err);
+      return null;
+    }
+  };
+
+  const saveFarm = (body: { id?: string; name: string; region: string; farmer: string }) =>
+    mutate(async () => {
+      if (body.id) await api.patch(`/admin/farms/${body.id}`, body);
+      else await api.post('/admin/farms', body);
+      await reloadPlots();
+      return true;
+    }, body.id ? 'Farm updated' : 'Farm created');
+
+  const removeFarm = (id: string) =>
+    mutate(async () => {
+      await api.del(`/admin/farms/${id}`);
+      await reloadPlots();
+      return true;
+    }, 'Farm deleted');
+
+  const savePlot = (body: {
+    isNew?: boolean;
+    key?: string;
+    name: string;
+    farmId: string;
+    region: string;
+    city: string;
+    district: string;
+    state: string;
+    size: string;
+    crop: string;
+    soil: string;
+    opsStatus: string;
+    totalUnits: number;
+    availableUnits: number;
+  }) =>
+    mutate(async () => {
+      const payload = {
+        name: body.name,
+        farmId: body.farmId,
+        region: body.region,
+        city: body.city,
+        district: body.district,
+        state: body.state,
+        size: body.size,
+        crop: body.crop,
+        soil: body.soil,
+        opsStatus: body.opsStatus,
+        totalUnits: body.totalUnits,
+        availableUnits: body.availableUnits,
+      };
+      const { data } = body.isNew || !body.key
+        ? await api.post('/admin/plots', payload)
+        : await api.patch(`/admin/plots/${body.key}`, payload);
+      await reloadPlots();
+      return mapPlot(asRecord(data));
+    }, body.isNew || !body.key ? 'Plot created' : 'Plot updated');
+
+  const removePlot = (key: string) =>
+    mutate(async () => {
+      await api.del(`/admin/plots/${key}`);
+      await reloadPlots();
+      return true;
+    }, 'Plot deleted');
+
+  const patchPlotImages = async (
+    key: string,
+    next: { imageUrl?: string | null; gallery: { label: string; imageUrl: string }[] }
+  ) => {
+    const { data } = await api.patch(`/admin/plots/${key}`, {
+      imageUrl: next.imageUrl || null,
+      gallery: next.gallery,
+    });
+    return data;
+  };
+
+  const addPlotImage = (key: string, body: { dataUrl?: string; imageUrl?: string; label?: string; setCover?: boolean }) =>
+    writeQuiet(async () => {
+      let data: unknown;
+      try {
+        data = (await api.post(`/admin/plots/${key}/images`, body)).data;
+      } catch (err) {
+        const missingRoute = err instanceof ApiError && (err.status === 404 || err.status === 405);
+        if (!missingRoute) throw err;
+        const current = mapPlot(asRecord((await api.get(`/admin/plots/${key}`)).data));
+        const imageUrl = body.dataUrl || body.imageUrl || '';
+        const gallery = [...(current.gallery || []), { label: body.label || 'photo', imageUrl }];
+        const cover = body.setCover || !current.imageUrl ? imageUrl : current.imageUrl;
+        data = await patchPlotImages(key, { imageUrl: cover, gallery });
+      }
+      await reloadPlots();
+      return mapPlot(asRecord(data));
+    }, 'Image added');
+
+  const removePlotImage = (key: string, imageUrl: string) =>
+    writeQuiet(async () => {
+      let data: unknown;
+      try {
+        data = (await api.post(`/admin/plots/${key}/images/remove`, { imageUrl })).data;
+      } catch (err) {
+        const missingRoute =
+          err instanceof ApiError &&
+          (err.status === 404 || err.status === 405) &&
+          err.code !== 'IMAGE_NOT_FOUND';
+        if (!missingRoute) throw err;
+        const current = mapPlot(asRecord((await api.get(`/admin/plots/${key}`)).data));
+        const gallery = (current.gallery || []).filter((g) => !samePlotImage(g.imageUrl, imageUrl));
+        const cover = samePlotImage(current.imageUrl, imageUrl) ? gallery[0]?.imageUrl || '' : current.imageUrl;
+        data = await patchPlotImages(key, { imageUrl: cover, gallery });
+      }
+      await reloadPlots();
+      return mapPlot(asRecord(data));
+    }, 'Image removed');
+
   const plotDetail = (key: string) => {
     void run(async () => {
       const { data } = await api.get(`/admin/plots/${key}`);
@@ -900,7 +1046,6 @@ export function useAppLogic() {
   const runModal = () => {
     const k = stateRef.current.modal?.kind;
     if (k === 'markPaid') return doMarkPaid();
-    if (k === 'refund') return doRefund();
     if (k === 'createPay') return doCreatePay();
     if (k === 'member') return doMemberAction();
     if (k === 'sub') return doSubAction();
@@ -908,6 +1053,88 @@ export function useAppLogic() {
     if (k === 'supplement') return doAddSupplement();
     closeModal();
   };
+
+  const cropKeyFromName = (name: string) =>
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+  const reloadCrops = () => afterWrite([loadCrops, loadCultivations, loadPlots]);
+
+  const saveCrop = (body: { isNew: boolean; key?: string; name: string; season: string; unit: string }) =>
+    mutate(async () => {
+      const name = body.name.trim();
+      if (!name) throw new Error('Enter a crop name');
+      const season = body.season.trim() || 'All';
+      const unit = body.unit.trim() || 'kg';
+      if (body.isNew) {
+        const key = cropKeyFromName(name);
+        if (!key) throw new Error('Enter a crop name');
+        await api.post('/admin/crops', { key, name, season, unit });
+      } else if (body.key) {
+        await api.patch(`/admin/crops/${body.key}`, { name, season, unit });
+      }
+      await reloadCrops();
+      return true;
+    }, body.isNew ? 'Crop added' : 'Crop updated');
+
+  const removeCrop = (key: string) =>
+    mutate(async () => {
+      await api.del(`/admin/crops/${key}`);
+      await reloadCrops();
+      return true;
+    }, 'Crop deleted');
+
+  const saveHarvest = (body: {
+    isNew: boolean;
+    previousPlotKey?: string;
+    plotKey: string;
+    cropName: string;
+    plantDate: string;
+    harvestDate: string;
+    cropStage: string;
+    targetYield: number;
+    actualYield: string;
+  }) =>
+    mutate(async () => {
+      if (!body.plotKey) throw new Error('Choose a plot');
+      const cropName = body.cropName.trim();
+      if (!cropName) throw new Error('Enter a crop name');
+      const known = stateRef.current.crops.find((c) => c.name.toLowerCase() === cropName.toLowerCase());
+      let cropKey = known?.key;
+      if (!cropKey) {
+        cropKey = cropKeyFromName(cropName);
+        if (!cropKey) throw new Error('Enter a crop name');
+        await api.post('/admin/crops', { key: cropKey, name: cropName, season: 'All', unit: 'kg' });
+      }
+      if (body.previousPlotKey && body.previousPlotKey !== body.plotKey) {
+        await api.del(`/admin/plots/${body.previousPlotKey}/crop`);
+      }
+      await api.post(`/admin/plots/${body.plotKey}/crop`, {
+        cropKey,
+        plantDate: body.plantDate || null,
+        harvestDate: body.harvestDate || null,
+        cropStage: body.cropStage,
+        targetYield: body.targetYield,
+      });
+      if (body.actualYield.trim() !== '') {
+        await api.patch(`/admin/plots/${body.plotKey}/yield`, {
+          actualYield: Number(body.actualYield),
+          targetYield: body.targetYield,
+        });
+      }
+      await reloadCrops();
+      return true;
+    }, body.isNew ? 'Harvest added' : 'Harvest updated');
+
+  const removeHarvest = (plotKey: string) =>
+    mutate(async () => {
+      await api.del(`/admin/plots/${plotKey}/crop`);
+      await reloadCrops();
+      return true;
+    }, 'Harvest removed');
 
   const advanceStage = (key: string) => {
     void run(async () => {
@@ -1092,6 +1319,57 @@ export function useAppLogic() {
     void loadReports(apiRange).catch((err) => fail(err));
   };
 
+  const saveStaff = async (input: {
+    id?: string;
+    name: string;
+    email: string;
+    role: string;
+    password?: string;
+  }) => {
+    let ok = false;
+    await run(async () => {
+      if (input.id) {
+        const body: Record<string, unknown> = {
+          name: input.name.trim(),
+          email: input.email.trim(),
+          role: input.role,
+        };
+        if (input.password) body.password = input.password;
+        await api.patch(`/admin/staff/${input.id}`, body);
+      } else {
+        await api.post('/admin/staff', {
+          name: input.name.trim(),
+          email: input.email.trim(),
+          role: input.role,
+          password: input.password,
+        }, { idempotent: true });
+      }
+      await afterWrite([async () => { await loadStaff(); }]);
+      ok = true;
+    }, input.id ? 'Staff updated' : 'Staff added');
+    return ok;
+  };
+
+  const removeStaff = async (id: string) => {
+    let ok = false;
+    await run(async () => {
+      await api.del(`/admin/staff/${id}`);
+      await afterWrite([async () => { await loadStaff(); }]);
+      ok = true;
+    }, 'Staff removed');
+    return ok;
+  };
+
+  const restoreStaff = async (id: string) => {
+    let ok = false;
+    await run(async () => {
+      await api.patch(`/admin/staff/${id}`, { active: true });
+      await afterWrite([async () => { await loadStaff(); }]);
+      ok = true;
+    }, 'Staff restored');
+    return ok;
+  };
+
   const exportReport = () => {
     void run(async () => {
       await downloadCsv('/admin/reports/export', { range: RANGE_API[stateRef.current.reportRange] || 'this_month' });
@@ -1146,8 +1424,6 @@ export function useAppLogic() {
     markPaid,
     doMarkPaid,
     payReminder,
-    refundPay,
-    doRefund,
     showReceipt,
     openCreatePay,
     doCreatePay,
@@ -1161,8 +1437,19 @@ export function useAppLogic() {
     doSubAction,
     runModal,
     plotDetail,
+    fetchPlot,
+    saveFarm,
+    removeFarm,
+    savePlot,
+    removePlot,
+    addPlotImage,
+    removePlotImage,
     assignPlot,
     doAssign,
+    saveCrop,
+    removeCrop,
+    saveHarvest,
+    removeHarvest,
     advanceStage,
     addSupplement,
     advanceBasket,
@@ -1184,6 +1471,9 @@ export function useAppLogic() {
     ticketAct,
     setReportRange,
     exportReport,
+    saveStaff,
+    removeStaff,
+    restoreStaff,
     setMemberFilter,
     setPayFilter,
     setSubFilter,

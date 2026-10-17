@@ -530,7 +530,7 @@ Created on membership activation:
   "etaLabel": "Mon 24 Aug",
   "etaDate": "2026-08-24",
   "imageUrl": "https://…",
-  "description": "Seasonal vegetable sample box"
+  "description": "Token of Love"
 }
 ```
 

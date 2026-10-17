@@ -31,6 +31,22 @@ export function Dashboard() {
 
   return (
     <div className="ch-fade">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 14 }}>
+        <button
+          onClick={() => actions.go('plots')}
+          className="ch-btn-primary"
+          style={{ padding: '11px 18px', borderRadius: 3, fontSize: 14, fontWeight: 600 }}
+        >
+          Plots & Farm
+        </button>
+        <button
+          onClick={() => actions.go('crops')}
+          className="ch-btn-primary"
+          style={{ padding: '11px 18px', borderRadius: 3, fontSize: 14, fontWeight: 600 }}
+        >
+          Crops & Harvest
+        </button>
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
         {kpis.map((item) => (
           <div key={item.label} onClick={() => actions.go(item.tab)} className="ch-card-hover" style={cardStyle}>
