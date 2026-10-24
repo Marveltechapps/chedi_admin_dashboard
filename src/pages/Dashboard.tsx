@@ -47,7 +47,7 @@ export function Dashboard() {
           Crops & Harvest
         </button>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+      <div className="ch-kpi-grid">
         {kpis.map((item) => (
           <div key={item.label} onClick={() => actions.go(item.tab)} className="ch-card-hover" style={cardStyle}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -62,7 +62,7 @@ export function Dashboard() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginTop: 16 }}>
+      <div className="ch-split">
         <div style={{ background: '#fff', border: '1px solid #e4ded0', borderRadius: 8, padding: 22 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <h3 style={{ fontFamily: "'Newsreader',serif", fontWeight: 500, fontSize: 20, color: '#1c3b2c', margin: 0 }}>Pending actions</h3>

@@ -19,6 +19,29 @@ export function nextSaturdayIso(from = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
 
+export function isSaturdayIso(iso: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  return new Date(`${iso}T00:00:00.000Z`).getUTCDay() === 6;
+}
+
+/** The next Saturdays, starting with the coming one (or the following one if today is Saturday). */
+export function upcomingSaturdayIsos(count = 6, from = new Date()): { iso: string; label: string }[] {
+  const start = nextSaturdayIso(from);
+  const [year, month, day] = start.split('-').map(Number);
+  const first = new Date(Date.UTC(year, month - 1, day));
+  const out: { iso: string; label: string }[] = [];
+  for (let i = 0; i < count; i++) {
+    const dt = new Date(first);
+    dt.setUTCDate(first.getUTCDate() + i * 7);
+    const iso = dt.toISOString().slice(0, 10);
+    out.push({
+      iso,
+      label: dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }),
+    });
+  }
+  return out;
+}
+
 export function capitalize(value?: string | null): string {
   if (!value) return '';
   return value.charAt(0).toUpperCase() + value.slice(1);

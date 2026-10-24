@@ -26,7 +26,7 @@ export function Topbar() {
   const actionCount = state.dashboard?.kpis.pendingActionCount ?? 0;
 
   return (
-    <div style={{ flex: '0 0 auto', height: 72, background: '#f6f3ea', borderBottom: '1px solid #e0d9c6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px' }}>
+    <div className="ch-admin-top" style={{ flex: '0 0 auto', height: 72, background: '#f6f3ea', borderBottom: '1px solid #e0d9c6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px' }}>
       <div>
         <div style={{ fontFamily: "'Newsreader',serif", fontSize: 22, color: '#1c3b2c', lineHeight: 1.1 }}>{title}</div>
         <div style={{ fontSize: 12, color: '#9aa08d', marginTop: 1 }}>{subtitle}</div>
@@ -36,7 +36,8 @@ export function Topbar() {
           <input
             value={state.search}
             onChange={(e) => actions.onSearch(e.target.value)}
-            placeholder="Search members, refs, plots"
+            placeholder="Search name, email, or user ID"
+            className="ch-admin-search"
             style={{ width: 250, padding: '10px 14px 10px 36px', border: '1px solid #d8cfb8', borderRadius: 4, fontSize: 13, background: '#faf8f2' }}
           />
           <span style={{ position: 'absolute', top: '50%', left: 12, transform: 'translateY(-50%)', pointerEvents: 'none' }}>

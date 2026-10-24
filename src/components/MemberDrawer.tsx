@@ -1,16 +1,75 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useApp } from '../store/AppContext';
 import { Icon } from '../lib/icons';
 import { pill, sPill } from '../lib/pill';
-import { avatarBtnStyle } from '../lib/buttons';
+import { actionBtnStyle, avatarBtnStyle } from '../lib/buttons';
 import { fmt } from '../lib/format';
+import { formatCollectionRef } from '../lib/collectionRef';
+import { canWriteMembers } from '../lib/roles';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+const fieldStyle = {
+  width: '100%',
+  marginTop: 6,
+  padding: '10px 12px',
+  border: '1px solid #d8cfb8',
+  borderRadius: 3,
+  fontSize: 14,
+  background: '#faf8f2',
+} as const;
 
 type DrawerTab = 'profile' | 'payments' | 'deliveries' | 'timeline';
 
 export function MemberDrawer() {
   const { state, actions, helpers } = useApp();
   const m = helpers.member(state.drawerId);
+  const me = state.team.find((t) => t.id === state.me);
+  const canWrite = canWriteMembers(me?.roleKey);
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [draft, setDraft] = useState({ name: '', email: '', phone: '', address: '', city: '', pin: '' });
   if (!m) return null;
+
+  const startEdit = () => {
+    setConfirmDelete(false);
+    setDraft({
+      name: m.name,
+      email: m.email,
+      phone: m.phone,
+      address: m.addressLine || '',
+      city: m.city || '',
+      pin: m.pin || '',
+    });
+    setEditing(true);
+    actions.setDrawerTab('profile');
+  };
+
+  const saveEdit = async () => {
+    if (draft.name.trim().length < 2) {
+      actions.flash('Enter a name');
+      return;
+    }
+    if (!EMAIL_RE.test(draft.email.trim())) {
+      actions.flash('Enter a valid email address');
+      return;
+    }
+    if (draft.phone.replace(/\D/g, '').length < 10) {
+      actions.flash('Enter a valid mobile number');
+      return;
+    }
+    if (!draft.address.trim() || !draft.city.trim() || !/^\d{6}$/.test(draft.pin.trim())) {
+      actions.flash('Enter address, city, and a 6-digit PIN');
+      return;
+    }
+    const ok = await actions.saveMember({ id: m.id, ...draft });
+    if (ok) setEditing(false);
+  };
+
+  const remove = async () => {
+    const ok = await actions.deleteMember(m.id);
+    if (ok) setConfirmDelete(false);
+  };
 
   const status = pill(m.status);
   const sub = pill(m.subStatus === 'none' ? 'none' : m.subStatus);
@@ -36,6 +95,7 @@ export function MemberDrawer() {
   ];
 
   const profileRows = [
+    { k: 'User ID', v: m.memberCode || m.id },
     { k: 'Mobile', v: m.phone || '—' },
     { k: 'Email', v: m.email || '—' },
     { k: 'Delivery address', v: m.address || '—' },
@@ -86,7 +146,18 @@ export function MemberDrawer() {
                 {a.label}
               </button>
             ))}
+            {canWrite && <button type="button" onClick={startEdit} style={avatarBtnStyle()}>Edit</button>}
+            {canWrite && !confirmDelete && (
+              <button type="button" onClick={() => { setEditing(false); setConfirmDelete(true); }} style={avatarBtnStyle(true)}>Delete</button>
+            )}
           </div>
+          {confirmDelete && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '-6px 0 16px', fontSize: 13, color: '#6f7566' }}>
+              Delete {m.memberCode || m.id}? This removes the account and releases any leased plot.
+              <button type="button" onClick={remove} disabled={state.busy} style={actionBtnStyle(false, true)}>Confirm delete</button>
+              <button type="button" onClick={() => setConfirmDelete(false)} style={actionBtnStyle()}>Cancel</button>
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 6, marginBottom: 14, borderBottom: '1px solid #e4ded0' }}>
             {tabs.map((t) => {
@@ -103,7 +174,35 @@ export function MemberDrawer() {
             })}
           </div>
 
-          {state.drawerTab === 'profile' && (
+          {state.drawerTab === 'profile' && editing && (
+            <div style={{ background: '#fff', border: '1px solid #e4ded0', borderRadius: 7, padding: '16px 18px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#1c3b2c', marginBottom: 8 }}>Edit {m.memberCode || m.id}</div>
+              <label style={{ fontSize: 12.5, color: '#6f7566', fontWeight: 600 }}>Name</label>
+              <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} style={fieldStyle} />
+              <label style={{ display: 'block', marginTop: 12, fontSize: 12.5, color: '#6f7566', fontWeight: 600 }}>Email</label>
+              <input value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} type="email" style={fieldStyle} />
+              <label style={{ display: 'block', marginTop: 12, fontSize: 12.5, color: '#6f7566', fontWeight: 600 }}>Mobile</label>
+              <input value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} style={fieldStyle} />
+              <label style={{ display: 'block', marginTop: 12, fontSize: 12.5, color: '#6f7566', fontWeight: 600 }}>Delivery address</label>
+              <input value={draft.address} onChange={(e) => setDraft({ ...draft, address: e.target.value })} style={fieldStyle} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 10, marginTop: 12 }}>
+                <label style={{ fontSize: 12.5, color: '#6f7566', fontWeight: 600 }}>
+                  City
+                  <input value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} style={fieldStyle} />
+                </label>
+                <label style={{ fontSize: 12.5, color: '#6f7566', fontWeight: 600 }}>
+                  PIN
+                  <input value={draft.pin} onChange={(e) => setDraft({ ...draft, pin: e.target.value })} inputMode="numeric" style={fieldStyle} />
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                <button type="button" onClick={saveEdit} disabled={state.busy} className="ch-btn-primary" style={{ padding: '8px 14px', borderRadius: 3, fontSize: 13, fontWeight: 600 }}>Save changes</button>
+                <button type="button" onClick={() => setEditing(false)} style={actionBtnStyle()}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {state.drawerTab === 'profile' && !editing && (
             <div style={{ background: '#fff', border: '1px solid #e4ded0', borderRadius: 7, padding: '16px 18px' }}>
               {profileRows.map((r, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 13.5, borderTop: i === 0 ? 'none' : '1px solid #f2ede1' }}>
@@ -117,10 +216,12 @@ export function MemberDrawer() {
           {state.drawerTab === 'payments' && (
             <div style={{ background: '#fff', border: '1px solid #e4ded0', borderRadius: 7, overflow: 'hidden' }}>
               {payments.map((p, i) => (
-                <div key={p.ref} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', borderTop: i === 0 ? 'none' : '1px solid #f2ede1', fontSize: 13 }}>
+                <div key={p.id || p.ref} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', borderTop: i === 0 ? 'none' : '1px solid #f2ede1', fontSize: 13 }}>
                   <div>
                     <div style={{ color: '#3a4033' }}>{p.desc}</div>
-                    <div style={{ fontSize: 11, color: '#9aa08d', marginTop: 1 }}>{p.date} · {p.ref}</div>
+                    <div style={{ fontSize: 11, color: '#9aa08d', marginTop: 1, fontFamily: "'Space Mono',monospace" }}>{p.id || p.ref}</div>
+                    {p.collectionRef && <div style={{ fontSize: 11, color: '#1c3b2c', marginTop: 1, fontFamily: "'Space Mono',monospace" }}>UTR {formatCollectionRef(p.collectionRef)}</div>}
+                    <div style={{ fontSize: 11, color: '#9aa08d', marginTop: 1 }}>{p.date}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: 700, color: '#1c3b2c' }}>{fmt(p.amount)}</div>

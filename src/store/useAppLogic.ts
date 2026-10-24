@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   AppState,
+  Delivery,
   TabKey,
   MemberStatus,
   ModalState,
   TeamMember,
 } from '../types';
 import { emptyState } from '../data/empty';
+import { describeCollectionRef, formatCollectionRef } from '../lib/collectionRef';
 import { fmt } from '../lib/format';
 import { api, ApiError, downloadCsv, errorMessage } from '../lib/api';
 import { clearSession, getAccessToken, getRefreshToken, getStoredStaff, saveSession } from '../lib/session';
-import { nextSaturdayIso } from '../lib/dates';
+import { isSaturdayIso, nextSaturdayIso, upcomingSaturdayIsos } from '../lib/dates';
 import { HREF_TAB } from '../lib/roles';
 import { connectRealtime, disconnectRealtime, subscribeRealtime, REALTIME_EVENTS } from '../lib/realtime';
 import {
@@ -556,7 +558,11 @@ export function useAppLogic() {
           })),
         }));
       } catch (err) {
-        fail(err, 'Could not load member');
+        setState((prev) => ({
+          ...prev,
+          drawerId: prev.members.some((m) => m.id === id || m.memberCode === id) ? prev.drawerId : null,
+        }));
+        fail(err, 'No user found for that ID');
       }
     })();
   };
@@ -630,12 +636,13 @@ export function useAppLogic() {
         rows: [
           { k: 'Member', v: m?.name || p.memberName || '—' },
           { k: 'For', v: p.desc },
-          { k: 'Reference', v: p.ref },
+          { k: 'Transaction ID', v: p.id || p.ref },
           { k: 'Amount', v: fmt(p.amount), w: 700 },
         ],
-        fieldLabel: 'Payment reference / UTR',
-        fieldPh: 'e.g. UPI 4471 / NEFT ref',
+        fieldLabel: 'UTR',
+        fieldPh: 'e.g. 4098 1234 5678',
         fieldVal: '',
+        fieldError: '',
         confirmLabel: 'Mark as paid',
         confirmBg: '#1c3b2c',
         confirmColor: '#f6f3ea',
@@ -643,18 +650,36 @@ export function useAppLogic() {
     });
   };
 
+  const takenRefs = (exceptRef?: string) =>
+    stateRef.current.payments
+      .filter((p) => (p.id || p.ref) !== exceptRef)
+      .map((p) => p.collectionRef || '')
+      .filter(Boolean);
+
   const doMarkPaid = () => {
     const md = stateRef.current.modal;
     if (!md?.ref) return;
+    const parsed = describeCollectionRef(md.fieldVal || '', takenRefs(md.ref));
+    if (!parsed.ok || !parsed.value) {
+      setModal({ fieldError: parsed.message });
+      return;
+    }
     const p = paymentOf(md.ref);
     void run(async () => {
-      await api.post(`/admin/payments/${md.ref}/mark-paid`, {
-        collectionRef: md.fieldVal || undefined,
-        method: 'offline',
-      }, { idempotent: true });
+      try {
+        await api.post(`/admin/payments/${md.ref}/mark-paid`, {
+          collectionRef: parsed.value,
+          method: 'offline',
+        }, { idempotent: true });
+      } catch (err) {
+        setModal({ fieldError: errorMessage(err, 'This payment reference / UTR was rejected') });
+        throw err;
+      }
       patch({ modal: null });
       await afterWrite([loadPayments, loadMembers, loadSubscriptions, loadDeliveries, loadPlots]);
-    }, p ? `Payment recorded · ${p.memberName || member(p.memberId)?.name || ''}` : 'Payment recorded');
+    }, p
+      ? `Payment recorded · ${p.memberName || member(p.memberId)?.name || ''} · ${formatCollectionRef(parsed.value)}`
+      : `Payment recorded · ${formatCollectionRef(parsed.value)}`);
   };
 
   const payReminder = (ref: string) => {
@@ -798,7 +823,7 @@ export function useAppLogic() {
     flash(`Composing message to ${m?.name || 'member'}`);
   };
 
-  const onModalField = (value: string) => setModal({ fieldVal: value });
+  const onModalField = (value: string) => setModal({ fieldVal: value, fieldError: '' });
 
   const drawerAct = (kind: string) => {
     const id = stateRef.current.drawerId;
@@ -1051,6 +1076,7 @@ export function useAppLogic() {
     if (k === 'sub') return doSubAction();
     if (k === 'assign') return doAssign();
     if (k === 'supplement') return doAddSupplement();
+    if (k === 'delivery') return doReschedule();
     closeModal();
   };
 
@@ -1197,22 +1223,132 @@ export function useAppLogic() {
     }, 'New draft basket created');
   };
 
-  const deliveryStep = (id: string) => {
-    void run(async () => {
-      await api.post(`/admin/deliveries/${id}/advance`);
-      await afterWrite([loadDeliveries, loadSent]);
-    }, 'Delivery updated');
+  const deliveryBusy = useRef(new Set<string>());
+  const NEXT_STATUS: Record<string, Delivery['status']> = {
+    scheduled: 'packed',
+    rescheduled: 'packed',
+    packed: 'ready_dispatch',
+    ready_dispatch: 'out',
+    out: 'delivered',
   };
 
-  const deliveryAct = (id: string, kind: 'cancel' | 'fail' | 'reschedule') => {
-    void run(async () => {
-      if (kind === 'reschedule') {
-        await api.post(`/admin/deliveries/${id}/reschedule`, { date: nextSaturdayIso() });
-      } else {
-        await api.post(`/admin/deliveries/${id}/${kind}`);
+  const applyDelivery = (dto: Record<string, unknown>) => {
+    const mapped = mapDelivery(dto);
+    setState((prev) => ({
+      ...prev,
+      deliveries: prev.deliveries.map((d) => (d.id === mapped.id ? { ...d, ...mapped } : d)),
+    }));
+  };
+
+  const deliveryStep = (id: string) => {
+    if (deliveryBusy.current.has(id)) return;
+    const current = stateRef.current.deliveries.find((d) => d.id === id);
+    const next = current ? NEXT_STATUS[current.status] : undefined;
+    if (!current || !next) return;
+    deliveryBusy.current.add(id);
+    setState((prev) => ({
+      ...prev,
+      deliveries: prev.deliveries.map((d) => (d.id === id ? { ...d, status: next } : d)),
+    }));
+    void (async () => {
+      try {
+        const { data } = await api.post(`/admin/deliveries/${id}/advance`);
+        applyDelivery(asRecord(data));
+        flash('Delivery updated');
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          deliveries: prev.deliveries.map((d) => (d.id === id ? current : d)),
+        }));
+        fail(err);
+      } finally {
+        deliveryBusy.current.delete(id);
       }
-      await afterWrite([loadDeliveries, loadSent]);
-    }, `Delivery ${kind === 'reschedule' ? 'rescheduled' : kind === 'fail' ? 'failed' : 'cancelled'}`);
+    })();
+  };
+
+  const deliveryAct = (id: string, kind: 'cancel' | 'fail') => {
+    if (deliveryBusy.current.has(id)) return;
+    const current = stateRef.current.deliveries.find((d) => d.id === id);
+    if (!current) return;
+    const optimistic: Delivery['status'] = kind === 'cancel' ? 'cancelled' : 'failed';
+    deliveryBusy.current.add(id);
+    setState((prev) => ({
+      ...prev,
+      deliveries: prev.deliveries.map((d) => (d.id === id ? { ...d, status: optimistic } : d)),
+    }));
+    void (async () => {
+      try {
+        const { data } = await api.post(`/admin/deliveries/${id}/${kind}`);
+        applyDelivery(asRecord(data));
+        flash(kind === 'fail' ? 'Delivery marked failed' : 'Delivery cancelled');
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          deliveries: prev.deliveries.map((d) => (d.id === id ? current : d)),
+        }));
+        fail(err);
+      } finally {
+        deliveryBusy.current.delete(id);
+      }
+    })();
+  };
+
+  const openReschedule = (id: string) => {
+    const row = stateRef.current.deliveries.find((d) => d.id === id);
+    if (!row) return;
+    const next = nextSaturdayIso();
+    patch({
+      modal: {
+        kind: 'delivery',
+        ref: id,
+        sub: 'reschedule',
+        iconBg: '#fdf3dc',
+        icon: 'refresh',
+        title: 'Reschedule delivery',
+        body: `Move ${row.memberName || 'this member'}'s ${row.date} delivery to another Saturday.`,
+        fieldVal: next,
+        selectLabel: 'New Saturday',
+        confirmLabel: 'Reschedule',
+        confirmBg: '#2e5a41',
+        confirmColor: '#f6f3ea',
+      },
+    });
+  };
+
+  const doReschedule = () => {
+    const md = stateRef.current.modal;
+    const id = md?.ref;
+    const date = (md?.fieldVal || '').slice(0, 10);
+    if (!id) return;
+    if (!isSaturdayIso(date)) {
+      setModal({ fieldError: 'Choose a Saturday.' });
+      return;
+    }
+    const current = stateRef.current.deliveries.find((d) => d.id === id);
+    if (!current || deliveryBusy.current.has(id)) return;
+    const label = upcomingSaturdayIsos().find((s) => s.iso === date)?.label || date;
+    patch({ modal: null });
+    deliveryBusy.current.add(id);
+    setState((prev) => ({
+      ...prev,
+      deliveries: prev.deliveries.map((d) => (d.id === id ? { ...d, status: 'rescheduled', date: label } : d)),
+    }));
+    void (async () => {
+      try {
+        const { data } = await api.post(`/admin/deliveries/${id}/reschedule`, { date });
+        applyDelivery(asRecord(data));
+        flash(`Delivery rescheduled to ${label}`);
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          deliveries: prev.deliveries.map((d) => (d.id === id ? current : d)),
+        }));
+        fail(err);
+      } finally {
+        deliveryBusy.current.delete(id);
+      }
+    })();
   };
 
   const resolveCancel = (id: string, approve: boolean) => {
@@ -1317,6 +1453,56 @@ export function useAppLogic() {
     const apiRange = RANGE_API[r] || r;
     patch({ reportRange: apiRange });
     void loadReports(apiRange).catch((err) => fail(err));
+  };
+
+  const saveMember = async (input: {
+    id?: string;
+    userId?: string;
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+    city: string;
+    pin: string;
+  }) => {
+    let ok = false;
+    await run(async () => {
+      const body: Record<string, unknown> = {
+        name: input.name.trim(),
+        email: input.email.trim(),
+        phone: input.phone.trim(),
+        address: {
+          line: input.address.trim(),
+          city: input.city.trim(),
+          pin: input.pin.trim(),
+        },
+      };
+      let savedId = input.id || '';
+      if (input.id) {
+        await api.patch(`/admin/members/${input.id}`, body);
+      } else {
+        if (input.userId?.trim()) body.userId = input.userId.trim();
+        const { data } = await api.post('/admin/members', body, { idempotent: true });
+        savedId = String(asRecord(data).id || '');
+      }
+      await afterWrite([loadMembers]);
+      if (savedId) openDrawer(savedId);
+      ok = true;
+    }, input.id ? 'Member updated' : 'Member created');
+    return ok;
+  };
+
+  const deleteMember = async (id: string) => {
+    let ok = false;
+    await run(async () => {
+      await api.del(`/admin/members/${id}`);
+      if (stateRef.current.drawerId === id || member(stateRef.current.drawerId)?.id === id) {
+        patch({ drawerId: null });
+      }
+      await afterWrite([loadMembers, loadPlots, loadSubscriptions, loadDeliveries]);
+      ok = true;
+    }, 'Member deleted');
+    return ok;
   };
 
   const saveStaff = async (input: {
@@ -1456,6 +1642,7 @@ export function useAppLogic() {
     dupBasket,
     deliveryStep,
     deliveryAct,
+    openReschedule,
     resolveCancel,
     subAction,
     chooseTemplate,
@@ -1471,6 +1658,8 @@ export function useAppLogic() {
     ticketAct,
     setReportRange,
     exportReport,
+    saveMember,
+    deleteMember,
     saveStaff,
     removeStaff,
     restoreStaff,

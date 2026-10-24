@@ -3,6 +3,9 @@ import { pill } from '../lib/pill';
 import { fmt } from '../lib/format';
 import { filterChipStyle, filterCountStyle, actionBtnStyle } from '../lib/buttons';
 import { Icon } from '../lib/icons';
+import { formatCollectionRef } from '../lib/collectionRef';
+
+const COLUMNS = '1.05fr 1.25fr 1fr 1.2fr 0.7fr 0.72fr 0.82fr 146px';
 
 const GROUPS: [string, string][] = [
   ['all', 'All'],
@@ -41,21 +44,23 @@ export function Payments() {
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #e4ded0', borderRadius: 8, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.9fr 0.9fr 0.9fr 1fr 150px', background: '#eef2e9', padding: '13px 20px', fontFamily: "'Space Mono',monospace", fontSize: 10.5, letterSpacing: '.05em', color: '#6f7566', textTransform: 'uppercase', borderBottom: '1px solid #dbe0d1' }}>
-          <span>Member</span><span>Description</span><span>Amount</span><span>Date</span><span>Status</span><span></span>
+        <div style={{ display: 'grid', gridTemplateColumns: COLUMNS, background: '#eef2e9', padding: '13px 20px', fontFamily: "'Space Mono',monospace", fontSize: 10.5, letterSpacing: '.05em', color: '#6f7566', textTransform: 'uppercase', borderBottom: '1px solid #dbe0d1' }}>
+          <span>Member</span><span>Description</span><span>Transaction ID</span><span>UTR</span><span>Amount</span><span>Date</span><span>Status</span><span></span>
         </div>
         {rows.map((p) => {
           const st = pill(p.status);
           const label = STATUS_LABEL[p.status] || st.label;
+          const txnId = p.id || p.ref;
           return (
-            <div key={p.id || p.ref} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.9fr 0.9fr 0.9fr 1fr 150px', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #efe9db', fontSize: 13 }}>
+            <div key={txnId} style={{ display: 'grid', gridTemplateColumns: COLUMNS, alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #efe9db', fontSize: 13 }}>
               <div>
                 <div style={{ fontWeight: 600, color: '#1c3b2c' }}>{p.memberName || '—'}</div>
                 <div style={{ fontFamily: "'Space Mono',monospace", fontSize: 10, color: '#9aa08d', marginTop: 2 }}>{TYPE_LABEL[p.type] || p.type}</div>
               </div>
-              <div style={{ color: '#4b5142' }}>
-                {p.desc}
-                <div style={{ fontFamily: "'Space Mono',monospace", fontSize: 10, color: '#b5b09c', marginTop: 2 }}>{p.ref}</div>
+              <div style={{ color: '#4b5142' }}>{p.desc}</div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: 11.5, color: '#1c3b2c', wordBreak: 'break-all' }}>{txnId}</div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: 12, color: p.collectionRef ? '#1c3b2c' : '#9aa08d', letterSpacing: '.02em' }}>
+                {p.collectionRef ? formatCollectionRef(p.collectionRef) : '—'}
               </div>
               <div style={{ fontWeight: 700, color: '#1c3b2c' }}>{fmt(p.amount)}</div>
               <div style={{ color: '#6f7566' }}>{p.date}</div>

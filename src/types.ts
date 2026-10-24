@@ -40,6 +40,8 @@ export interface Member {
   email: string;
   city: string;
   address: string;
+  addressLine: string;
+  pin: string;
   joined: string;
   status: MemberStatus;
   subStatus: SubStatus;
@@ -151,6 +153,7 @@ export interface Payment {
   status: PaymentStatus;
   method: string;
   collected: string;
+  collectionRef?: string;
   plotKey?: string;
   planKey?: string;
 }
@@ -281,6 +284,7 @@ export interface ModalState {
   fieldLabel?: string;
   fieldPh?: string;
   fieldVal?: string;
+  fieldError?: string;
   selectLabel?: string;
   selectVal?: string | null;
   selectVal2?: string;

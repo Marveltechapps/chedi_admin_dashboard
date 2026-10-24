@@ -24,6 +24,11 @@ const ROLE_MODULES: Record<string, string[]> = {
   support_agent: ['dashboard', 'members', 'notifications', 'support', 'audit'],
 };
 
+export function canWriteMembers(role: string | undefined): boolean {
+  if (!role || role === 'super_admin') return true;
+  return role === 'billing_manager';
+}
+
 export function canAccessTab(role: string | undefined, tab: TabKey): boolean {
   if (!role || role === 'super_admin') return true;
   const modules = ROLE_MODULES[role] || ROLE_MODULES.super_admin;

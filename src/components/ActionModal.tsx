@@ -1,6 +1,8 @@
 import { useApp } from '../store/AppContext';
 import { Icon, type IconName } from '../lib/icons';
 import { chipStyle } from '../lib/buttons';
+import { describeCollectionRef } from '../lib/collectionRef';
+import { upcomingSaturdayIsos } from '../lib/dates';
 
 const PAY_CONTEXTS = [
   { key: 'membership', label: 'Membership' },
@@ -50,6 +52,25 @@ export function ActionModal() {
   const hasField = !!md.fieldLabel;
   const hasSelect = selectOpts.length > 0;
   const hasContext = contextOpts.length > 0;
+  const takenRefs = md.kind === 'markPaid'
+    ? state.payments
+        .filter((p) => (p.id || p.ref) !== md.ref)
+        .map((p) => p.collectionRef || '')
+        .filter(Boolean)
+    : [];
+  const utr = md.kind === 'markPaid' ? describeCollectionRef(md.fieldVal || '', takenRefs) : null;
+  const fieldMessage = md.fieldError || utr?.message || '';
+  const fieldTone = md.fieldError || utr?.tone === 'error' ? 'error' : utr?.tone === 'ok' ? 'ok' : 'hint';
+  const saturdayOpts = md.kind === 'delivery'
+    ? upcomingSaturdayIsos().map((s) => ({
+        key: s.iso,
+        label: s.label,
+        on: (md.fieldVal || '').slice(0, 10) === s.iso,
+        onClick: () => actions.setModal({ fieldVal: s.iso, fieldError: '' }),
+      }))
+    : [];
+  const confirmBlocked = (md.kind === 'markPaid' && (Boolean(md.fieldError) || !utr?.ok))
+    || (md.kind === 'delivery' && !(md.fieldVal || '').trim());
 
   const runModal = () => {
     if (md.kind === 'info') return actions.closeModal();
@@ -102,8 +123,29 @@ export function ActionModal() {
               value={md.fieldVal || ''}
               onChange={(e) => actions.onModalField(e.target.value)}
               placeholder={md.fieldPh}
-              style={{ width: '100%', marginTop: 6, padding: '12px 14px', border: '1px solid #d8cfb8', borderRadius: 3, fontSize: 14, background: '#faf8f2' }}
+              autoComplete="off"
+              spellCheck={false}
+              style={{ width: '100%', marginTop: 6, padding: '12px 14px', border: `1px solid ${fieldTone === 'error' ? '#b0361f' : fieldTone === 'ok' ? '#2e5a41' : '#d8cfb8'}`, borderRadius: 3, fontSize: 14, background: '#faf8f2', fontFamily: md.kind === 'markPaid' ? "'Space Mono',monospace" : 'inherit' }}
             />
+            {fieldMessage && (
+              <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.4, color: fieldTone === 'error' ? '#b0361f' : fieldTone === 'ok' ? '#2e5a41' : '#6f7566', fontWeight: fieldTone === 'ok' ? 600 : 400 }}>{fieldMessage}</div>
+            )}
+          </div>
+        )}
+
+        {saturdayOpts.length > 0 && (
+          <div style={{ margin: '16px 28px 0' }}>
+            <label style={{ fontSize: 13, color: '#6f7566', fontWeight: 600 }}>{md.selectLabel || 'New Saturday'}</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+              {saturdayOpts.map((o) => (
+                <button key={o.key} type="button" onClick={o.onClick} style={chipStyle(o.on)}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            {md.fieldError && (
+              <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.4, color: '#b0361f' }}>{md.fieldError}</div>
+            )}
           </div>
         )}
 
@@ -126,8 +168,8 @@ export function ActionModal() {
           </button>
           <button
             onClick={runModal}
-            disabled={state.busy}
-            style={{ flex: 1.4, background: md.confirmBg, color: md.confirmColor, border: 'none', padding: 13, borderRadius: 2, fontWeight: 600, fontSize: 15, cursor: state.busy ? 'wait' : 'pointer', opacity: state.busy ? 0.7 : 1 }}
+            disabled={state.busy || confirmBlocked}
+            style={{ flex: 1.4, background: md.confirmBg, color: md.confirmColor, border: 'none', padding: 13, borderRadius: 2, fontWeight: 600, fontSize: 15, cursor: state.busy || confirmBlocked ? 'not-allowed' : 'pointer', opacity: state.busy || confirmBlocked ? 0.55 : 1 }}
           >
             {state.busy ? 'Working…' : md.confirmLabel}
           </button>

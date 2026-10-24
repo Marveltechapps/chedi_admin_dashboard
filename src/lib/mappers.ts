@@ -65,6 +65,8 @@ export function mapMember(dto: Record<string, unknown>): Member {
     email: str(dto.email),
     city: str(dto.city),
     address: str(dto.addressDisplay || dto.addressLine),
+    addressLine: str(dto.addressLine),
+    pin: str(dto.pin),
     joined: str(dto.joinedLabel),
     status: (dto.accountStatus || 'pending') as Member['status'],
     subStatus: (dto.subStatus || 'none') as Member['subStatus'],
@@ -171,6 +173,7 @@ export function mapPayment(dto: Record<string, unknown>): Payment {
     status: (dto.opsStatus || 'pending') as Payment['status'],
     method: str(dto.method),
     collected: formatDay(str(dto.collectedAt)) || str(dto.collectedAt),
+    collectionRef: str(dto.collectionRef),
     plotKey: str((dto.metadata as Record<string, unknown> | undefined)?.plotKey),
     planKey: str((dto.metadata as Record<string, unknown> | undefined)?.planKey),
   };

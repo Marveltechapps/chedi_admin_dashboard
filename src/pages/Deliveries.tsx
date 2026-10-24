@@ -42,8 +42,8 @@ const GROUPS: [string, string][] = [
   ['rescheduled', 'Rescheduled'],
 ];
 
-const FLOW: Record<string, string> = { scheduled: 'packed', packed: 'ready_dispatch', ready_dispatch: 'out', out: 'delivered' };
-const FLOW_LABEL: Record<string, string> = { scheduled: 'Pack', packed: 'Ready', ready_dispatch: 'Dispatch', out: 'Delivered' };
+const FLOW: Record<string, string> = { scheduled: 'packed', rescheduled: 'packed', packed: 'ready_dispatch', ready_dispatch: 'out', out: 'delivered' };
+const FLOW_LABEL: Record<string, string> = { scheduled: 'Pack', rescheduled: 'Pack', packed: 'Ready', ready_dispatch: 'Dispatch', out: 'Delivered' };
 
 export function Deliveries() {
   const { state, actions } = useApp();
@@ -71,15 +71,15 @@ export function Deliveries() {
         })}
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e4ded0', borderRadius: 8, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.1fr 0.9fr 0.7fr 1.1fr 1.5fr', background: '#eef2e9', padding: '13px 20px', fontFamily: "'Space Mono',monospace", fontSize: 10.5, letterSpacing: '.05em', color: '#6f7566', textTransform: 'uppercase', borderBottom: '1px solid #dbe0d1' }}>
+      <div className="ch-table-scroll" style={{ background: '#fff', border: '1px solid #e4ded0', borderRadius: 8 }}>
+        <div className="ch-del-grid ch-del-head">
           <span>Member · Address</span><span>Plot · Basket</span><span>Date</span><span>Boxes</span><span>Status</span><span></span>
         </div>
         {rows.map((d) => {
           const q = pill(d.status);
           const welcome = d.id.startsWith('welcome-');
           return (
-            <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.1fr 0.9fr 0.7fr 1.1fr 1.5fr', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #efe9db', fontSize: 13 }}>
+            <div key={d.id} className="ch-del-grid ch-del-row">
               <div>
                 <div style={{ fontWeight: 600, color: '#1c3b2c' }}>{d.memberName || '—'}</div>
                 <div style={{ fontSize: 11.5, color: '#9aa08d' }}>{d.addressDisplay || ''}</div>
@@ -91,16 +91,16 @@ export function Deliveries() {
               <div style={{ color: '#6f7566' }}>{d.date}</div>
               <div style={{ color: '#4b5142' }}>{d.boxes}</div>
               <div><span style={q.style}>{q.label}</span></div>
-              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <div className="ch-del-actions">
                 {!welcome && FLOW[d.status] && <button onClick={() => actions.deliveryStep(d.id)} style={actionBtnStyle(true)}>{FLOW_LABEL[d.status]}</button>}
-                {!welcome && ['scheduled', 'packed'].includes(d.status) && (
+                {!welcome && ['scheduled', 'packed', 'rescheduled'].includes(d.status) && (
                   <>
-                    <button onClick={() => actions.deliveryAct(d.id, 'reschedule')} style={actionBtnStyle()}>Reschedule</button>
+                    <button onClick={() => actions.openReschedule(d.id)} style={actionBtnStyle()}>Reschedule</button>
                     <button onClick={() => actions.deliveryAct(d.id, 'cancel')} style={actionBtnStyle(false, true)}>Cancel</button>
                   </>
                 )}
                 {!welcome && d.status === 'out' && <button onClick={() => actions.deliveryAct(d.id, 'fail')} style={actionBtnStyle(false, true)}>Failed</button>}
-                {!welcome && ['failed', 'cancelled'].includes(d.status) && <button onClick={() => actions.deliveryAct(d.id, 'reschedule')} style={actionBtnStyle()}>Reschedule</button>}
+                {!welcome && ['failed', 'cancelled'].includes(d.status) && <button onClick={() => actions.openReschedule(d.id)} style={actionBtnStyle()}>Reschedule</button>}
               </div>
             </div>
           );

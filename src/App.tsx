@@ -20,6 +20,7 @@ import { Notifications } from './pages/Notifications';
 import { Support } from './pages/Support';
 import { Reports } from './pages/Reports';
 import { Audit } from './pages/Audit';
+import { PageSkeleton } from './components/Skeleton';
 import type { TabKey } from './types';
 
 const PAGES: Record<TabKey, () => ReactElement | null> = {
@@ -43,17 +44,12 @@ function Console() {
   const Page = PAGES[state.tab] || Dashboard;
 
   return (
-    <div style={{ height: '100vh', background: '#f0ece0', display: 'flex', overflow: 'hidden' }}>
+    <div className="ch-admin-shell" style={{ height: '100vh', background: '#f0ece0', display: 'flex', overflow: 'hidden' }}>
       <Sidebar />
-      <main style={{ flex: 1, minWidth: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <main className="ch-admin-main" style={{ flex: 1, minWidth: 0, height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Topbar />
-        <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 48px', position: 'relative' }}>
-          {state.bootstrapping && (
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(240,236,224,.72)', zIndex: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#6f7566' }}>
-              Loading live data…
-            </div>
-          )}
-          <Page />
+        <div className="ch-admin-pad" style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 48px' }}>
+          {state.bootstrapping ? <PageSkeleton tab={state.tab} /> : <Page />}
         </div>
       </main>
 

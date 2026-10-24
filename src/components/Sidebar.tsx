@@ -30,12 +30,12 @@ export function Sidebar() {
   const items = NAV_ITEMS.filter((item) => canAccessTab(roleKey, item.key));
 
   return (
-    <aside style={{ width: 246, flex: '0 0 246px', background: '#1c3b2c', height: '100vh', padding: '22px 14px', display: 'flex', flexDirection: 'column' }}>
+    <aside className="ch-admin-sidebar" style={{ width: 246, flex: '0 0 246px', background: '#1c3b2c', height: '100vh', padding: '22px 14px', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '0 8px 16px', borderBottom: '1px solid #2f4c3c' }}>
         <div style={{ fontFamily: "'Newsreader',serif", fontSize: 23, fontWeight: 600, letterSpacing: '.14em', color: '#f6f3ea' }}>CHEDI</div>
         <div style={{ fontFamily: "'Space Mono',monospace", fontSize: 9.5, color: '#d9b45f', letterSpacing: '.18em', marginTop: 3 }}>ADMIN CONSOLE</div>
       </div>
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 12, overflowY: 'auto', overflowX: 'hidden' }}>
+      <nav className="ch-admin-nav" style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 12, overflowY: 'auto', overflowX: 'hidden' }}>
         {items.map((item) => {
           const on = state.tab === item.key;
           const badge = badges[item.key];
@@ -67,7 +67,7 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div style={{ marginTop: 'auto', padding: '14px 8px 0', borderTop: '1px solid #2f4c3c' }}>
+      <div className="ch-admin-user" style={{ marginTop: 'auto', padding: '14px 8px 0', borderTop: '1px solid #2f4c3c' }}>
         {me && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
             <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#d9b45f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Newsreader',serif", fontWeight: 600, color: '#1c3b2c', fontSize: 16 }}>
